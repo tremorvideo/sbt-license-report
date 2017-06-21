@@ -5,7 +5,7 @@ import sbt._
 import org.apache.ivy.core.report.ResolveReport
 import org.apache.ivy.core.resolve.IvyNode
 
-case class DepModuleInfo(organization: String, name: String, version: String) {
+case class DepModuleInfo(organization: String, name: String, version: String, url: String) {
   override def toString = s"${organization} # ${name} # ${version}"
 }
 case class DepLicense(module: DepModuleInfo, license: LicenseInfo, configs: Set[String]) {
@@ -20,6 +20,11 @@ case class LicenseReport(licenses: Seq[DepLicense], orig: ResolveReport) {
 
 object LicenseReport {
 
+  val tremorHeaders = Seq("Open Source Name", "Version", "License", "Link to License", "Dual-Licensed?", "Link to Source",
+    "Products", "Function Type", "Interaction", "Modified", "Distribution (Downloadable, Internally Used, SaaS)", "Compiled Together")
+
+  val defaultHeaders = Seq("Category", "License", "Dependency", "Notes")
+
   def withPrintableFile(file: File)(f: (Any => Unit) => Unit): Unit = {
     IO.createDirectory(file.getParentFile)
     Using.fileWriter(java.nio.charset.Charset.defaultCharset, false)(file) { writer =>
@@ -28,6 +33,49 @@ object LicenseReport {
         //writer.newLine()
       }
       f(println _)
+    }
+  }
+
+  def dumpTremorLicenseReport(report: LicenseReport, config: LicenseReportConfiguration, projectName: String): Unit = {
+    import config._
+    val ordered = report.licenses.filter(l => licenseFilter(l.license.category)) sortWith {
+      case (l, r) =>
+        if (l.license.category != r.license.category) l.license.category.name < r.license.category.name
+        else {
+          if (l.license.name != r.license.name) l.license.name < r.license.name
+          else {
+            l.module.toString < r.module.toString
+          }
+        }
+    }
+    // TODO - Make one of these for every configuration?
+    for (language <- languages) {
+      val reportFile = new File(config.reportDir, s"${title}.${language.ext}")
+      withPrintableFile(reportFile) { print =>
+        print(language.documentStart(title, reportStyleRules))
+        print(makeHeader(language))
+        print(language.tableHeader(tremorHeaders))
+        for (dep <- ordered) {
+          val licenseLink = language.createHyperLink(dep.license.url, dep.license.name)
+          print(language.tableRow(
+            Seq(
+              s"${dep.module.organization}:${dep.module.name}",
+              dep.module.version,
+              dep.license.name,
+              dep.license.url,
+              "No",
+              dep.module.url,
+              projectName, // Product,
+              "Java Library",
+              "Used via API",
+              "No",
+              "SaaS",
+              "No"
+            )))
+        }
+        print(language.tableEnd)
+        print(language.documentEnd)
+      }
     }
   }
 
@@ -49,14 +97,14 @@ object LicenseReport {
       withPrintableFile(reportFile) { print =>
         print(language.documentStart(title, reportStyleRules))
         print(makeHeader(language))
-        print(language.tableHeader("Category", "License", "Dependency", "Notes"))
+        print(language.tableHeader(defaultHeaders))
         for (dep <- ordered) {
           val licenseLink = language.createHyperLink(dep.license.url, dep.license.name)
           print(language.tableRow(
-            dep.license.category.name,
-            licenseLink,
-            dep.module.toString,
-            notes(dep.module) getOrElse ""))
+            Seq(dep.license.category.name,
+              licenseLink,
+              dep.module.toString,
+              notes(dep.module) getOrElse "")))
         }
         print(language.tableEnd)
         print(language.documentEnd)
@@ -65,7 +113,8 @@ object LicenseReport {
   }
   def getModuleInfo(dep: IvyNode): DepModuleInfo = {
     // TODO - null handling...
-    DepModuleInfo(dep.getModuleId.getOrganisation, dep.getModuleId.getName, dep.getModuleRevision.getId.getRevision)
+    DepModuleInfo(dep.getModuleId.getOrganisation, dep.getModuleId.getName, dep.getModuleRevision.getId.getRevision,
+      dep.getDescriptor.getHomePage)
   }
 
   def makeReport(module: IvySbt#Module, configs: Set[String], licenseSelection: Seq[LicenseCategory], overrides: DepModuleInfo => Option[LicenseInfo], log: Logger): LicenseReport = {

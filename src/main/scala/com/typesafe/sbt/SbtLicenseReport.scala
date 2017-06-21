@@ -26,6 +26,7 @@ object SbtLicenseReport extends AutoPlugin {
     val updateLicenses = taskKey[LicenseReport]("Construct a report of used licenses in a project.")
     val licenseReportConfigurations = taskKey[Seq[LicenseReportConfiguration]]("Configuration for each license report we're generating.")
     val dumpLicenseReport = taskKey[File]("Dumps a report file of the license report (using the target language).")
+    val dumpTremorLicenseReport = taskKey[File]("Dumps a Tremor report file of the license report (using the target language).")
     val licenseReportDir = settingKey[File]("The location where we'll write the license reports.")
     val licenseReportStyleRules = settingKey[Option[String]]("The style rules for license report styling.")
     val licenseReportTitle = settingKey[String]("The name of the license report.")
@@ -75,6 +76,13 @@ object SbtLicenseReport extends AutoPlugin {
         val dir = licenseReportDir.value
         for(config <- licenseReportConfigurations.value)
           LicenseReport.dumpLicenseReport(report, config)        
+        dir
+      },
+      dumpTremorLicenseReport := {
+        val report = updateLicenses.value
+        val dir = licenseReportDir.value
+        for(config <- licenseReportConfigurations.value)
+          LicenseReport.dumpTremorLicenseReport(report, config, normalizedName.value)
         dir
       }
 
