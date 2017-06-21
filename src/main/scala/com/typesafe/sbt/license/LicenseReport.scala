@@ -49,14 +49,14 @@ object LicenseReport {
       withPrintableFile(reportFile) { print =>
         print(language.documentStart(title, reportStyleRules))
         print(makeHeader(language))
-        print(language.tableHeader("Category", "License", "Dependency", "Notes"))
+        print(language.tableHeader(Seq("Category", "License", "Dependency", "Notes")))
         for (dep <- ordered) {
           val licenseLink = language.createHyperLink(dep.license.url, dep.license.name)
           print(language.tableRow(
-            dep.license.category.name,
-            licenseLink,
-            dep.module.toString,
-            notes(dep.module) getOrElse ""))
+            Seq(dep.license.category.name,
+              licenseLink,
+              dep.module.toString,
+              notes(dep.module) getOrElse "")))
         }
         print(language.tableEnd)
         print(language.documentEnd)

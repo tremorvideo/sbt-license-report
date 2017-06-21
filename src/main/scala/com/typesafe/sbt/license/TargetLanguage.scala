@@ -14,9 +14,9 @@ sealed trait TargetLanguage {
   /** Creates something equivalent to an html &lt;h1&gt; tag. */
   def header1(msg: String): String
   /** The syntax for the header of a table. */
-  def tableHeader(firstColumn: String, secondColumn: String, thirdColumn: String, fourthColumn: String): String
+  def tableHeader(columns: Seq[String]): String
   /** The syntax for a row of a table. */
-  def tableRow(firstColumn: String, secondColumn: String, thirdColumn: String, fourthColumn: String): String
+  def tableRow(columns: Seq[String]): String
   /** And a "table" */
   def tableEnd: String
   /** File extension for this style of report. */
@@ -31,12 +31,19 @@ case object MarkDown extends TargetLanguage {
     s"[$content]($link)"
   def blankLine(): String = "\n"
   def header1(msg: String): String = s"# $msg\n"
-  def tableHeader(firstColumn: String, secondColumn: String, thirdColumn: String, fourthColumn: String): String =
-    s"""
-$firstColumn | $secondColumn | $thirdColumn | $fourthColumn
---- | --- | --- | ---
-"""
-  def tableRow(firstColumn: String, secondColumn: String, thirdColumn: String, fourthColumn: String): String = s"$firstColumn | $secondColumn | $thirdColumn | <notextile>${escapeHtml(fourthColumn)}</notextile>\n"
+  def tableHeader(columns: Seq[String]): String = {
+    columns.mkString(" | ") + "\n" + columns.map(_ => "--- | ").dropRight(2)
+  }
+
+  def tableRow(columns: Seq[String]): String = {
+    columns.map { s =>
+      if (s.contains("|"))
+        s"<notextile>${escapeHtml(s)}</notextile> | "
+      else
+        s"$s | "
+    }.dropRight(2) + "\n"
+  }
+
   def tableEnd: String = "\n"
 
   def markdownEncode(s: String): String = s.flatMap {
@@ -63,12 +70,14 @@ case object Html extends TargetLanguage {
     s"""<a href="$link">$content</a>"""
   def blankLine(): String = "<p>&nbsp;</p>"
   def header1(msg: String): String = s"<h1>$msg</h1>"
-  def tableHeader(firstColumn: String, secondColumn: String, thirdColumn: String, fourthColumn: String): String =
+  def tableHeader(columns: Seq[String]): String =
     s"""<table border="0" cellspacing="0" cellpading="1">
-      <thead><tr><th>$firstColumn</th><th>$secondColumn</th><th>$thirdColumn</th><th>$fourthColumn</th></tr></thead>
+      <thead><tr>${columns.map(c => s"<th>$c</th>")}</tr></thead>
     <tbody>"""
-  def tableRow(firstColumn: String, secondColumn: String, thirdColumn: String, fourthColumn: String): String =
-    s"""<tr><td>${firstColumn}&nbsp;</td><td>${secondColumn}&nbsp;</td><td>${thirdColumn}&nbsp;</td><td>${htmlEncode(fourthColumn)}</td></tr>"""
+  def tableRow(columns: Seq[String]): String = {
+    s"""<tr>${columns.map(c => s"<td>${htmlEncode(c)}</td>")}</tr>"""
+  }
+
   def tableEnd: String = "</tbody></table>"
 
   def htmlEncode(s: String) = org.apache.commons.lang3.StringEscapeUtils.escapeHtml4(s)
@@ -83,10 +92,9 @@ case object Csv extends TargetLanguage {
   }
   def blankLine(): String = ""
   def header1(msg: String): String = ""
-  def tableHeader(firstColumn: String, secondColumn: String, thirdColumn: String, fourthColumn: String): String =
-    tableRow(firstColumn, secondColumn, thirdColumn, fourthColumn)
-  def tableRow(firstColumn: String, secondColumn: String, thirdColumn: String, fourthColumn: String): String =
-    s"""${csvEncode(firstColumn)},${csvEncode(secondColumn)},${csvEncode(thirdColumn)},${csvEncode(fourthColumn)}\n"""
+  def tableHeader(columns: Seq[String]): String = tableRow(columns)
+  def tableRow(columns: Seq[String]): String = columns.mkString(",") + "\n"
+
   def tableEnd: String = ""
   def csvEncode(s: String): String = org.apache.commons.lang3.StringEscapeUtils.escapeCsv(s)
 }
