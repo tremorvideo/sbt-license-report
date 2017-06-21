@@ -32,7 +32,7 @@ case object MarkDown extends TargetLanguage {
   def blankLine(): String = "\n"
   def header1(msg: String): String = s"# $msg\n"
   def tableHeader(columns: Seq[String]): String = {
-    columns.mkString(" | ") + "\n" + columns.map(_ => "--- | ").dropRight(2)
+    columns.mkString(" | ") + "\n" + ("--- | " * columns.length).dropRight(2)
   }
 
   def tableRow(columns: Seq[String]): String = {
@@ -41,7 +41,7 @@ case object MarkDown extends TargetLanguage {
         s"<notextile>${escapeHtml(s)}</notextile> | "
       else
         s"$s | "
-    }.dropRight(2) + "\n"
+    }.mkString.dropRight(2) + "\n"
   }
 
   def tableEnd: String = "\n"
@@ -72,10 +72,10 @@ case object Html extends TargetLanguage {
   def header1(msg: String): String = s"<h1>$msg</h1>"
   def tableHeader(columns: Seq[String]): String =
     s"""<table border="0" cellspacing="0" cellpading="1">
-      <thead><tr>${columns.map(c => s"<th>$c</th>")}</tr></thead>
+      <thead><tr>${columns.map(c => s"<th>$c</th>").mkString}</tr></thead>
     <tbody>"""
   def tableRow(columns: Seq[String]): String = {
-    s"""<tr>${columns.map(c => s"<td>${htmlEncode(c)}</td>")}</tr>"""
+    s"""<tr>${columns.map(c => s"<td>${htmlEncode(c)}</td>").mkString}</tr>"""
   }
 
   def tableEnd: String = "</tbody></table>"
@@ -93,7 +93,7 @@ case object Csv extends TargetLanguage {
   def blankLine(): String = ""
   def header1(msg: String): String = ""
   def tableHeader(columns: Seq[String]): String = tableRow(columns)
-  def tableRow(columns: Seq[String]): String = columns.mkString(",") + "\n"
+  def tableRow(columns: Seq[String]): String = columns.map(csvEncode(_)).mkString(",") + "\n"
 
   def tableEnd: String = ""
   def csvEncode(s: String): String = org.apache.commons.lang3.StringEscapeUtils.escapeCsv(s)
