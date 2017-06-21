@@ -9,6 +9,20 @@ bintrayOrganization := Some("sbt")
 name in bintray := "sbt-license-report"
 bintrayRepository := "sbt-plugin-releases"
 
+publishTo := {
+  Some(
+    Resolver.url(
+      "sbt-plugin-releases",
+      new URL("http://repo.scala-sbt.org/scalasbt/sbt-plugin-releases/")
+    )(Resolver.ivyStylePatterns)
+  )
+  val artifactory = "http://artifactory.service.iad1.consul:8081/artifactory/"
+  val (name, url) = if (version.value.contains("-SNAPSHOT"))
+    ("Artifactory Realm", artifactory + "libs-snapshot;build.timestamp=" + new java.util.Date().getTime)
+  else
+    ("Artifactory Realm", artifactory + "libs-release;build.timestamp=" + new java.util.Date().getTime)
+  Some(Resolver.url(name, new URL(url)))
+}
 
 scalariformSettings
 
