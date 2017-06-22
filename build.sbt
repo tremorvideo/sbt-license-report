@@ -26,7 +26,7 @@ publishTo := {
 
 scalariformSettings
 
-versionWithGit
+//versionWithGit
 
 //git.baseVersion := "1.0"
 
