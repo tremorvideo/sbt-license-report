@@ -7,11 +7,17 @@ sbt 0.13.5+
 
 Create a file in your project called `project/license.sbt` with the following contents:
 
-    addSbtPlugin("com.typesafe.sbt" % "sbt-license-report" % "1.2.0")
+    addSbtPlugin("com.typesafe.sbt" % "sbt-license-report" % "1.2.1")
 
 ## Usage
 
+Generates the default license report
+
      > dumpLicenseReport
+     
+Generates a license report for Tremor Video use
+     
+     > dumpTremorLiceneReport
 
 This dumps a report of all the licenses used in a project, with an attempt to organize them.  These are dumped, by default, to the `target/license-reports` directory.
 
@@ -50,13 +56,9 @@ can be controlled via the following keys:
 
 # Releasing
 
-A three step process
+Pushes to the artifactory
 
-
-    > git tag -u <pgp key> v<version>
-    > sbt
-    sbt> publishSigned
-
+    > sbt release
 
 # License
 
