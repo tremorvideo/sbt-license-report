@@ -5,9 +5,9 @@ name := "sbt-license-report"
 sbtPlugin := true
 
 publishMavenStyle := false
-bintrayOrganization := Some("sbt")
-name in bintray := "sbt-license-report"
-bintrayRepository := "sbt-plugin-releases"
+//bintrayOrganization := Some("sbt")
+//name in bintray := "sbt-license-report"
+//bintrayRepository := "sbt-plugin-releases"
 
 publishTo := {
   Some(
@@ -28,7 +28,7 @@ scalariformSettings
 
 versionWithGit
 
-git.baseVersion := "1.0"
+//git.baseVersion := "1.0"
 
 licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html"))
 
