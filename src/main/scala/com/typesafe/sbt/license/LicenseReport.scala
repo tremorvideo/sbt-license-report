@@ -5,6 +5,9 @@ import sbt._
 import org.apache.ivy.core.report.ResolveReport
 import org.apache.ivy.core.resolve.IvyNode
 
+import scala.xml.Elem
+import scalaj.http.{ Http, HttpResponse }
+
 case class DepModuleInfo(organization: String, name: String, version: String, url: String) {
   override def toString = s"${organization} # ${name} # ${version}"
 }
@@ -20,10 +23,87 @@ case class LicenseReport(licenses: Seq[DepLicense], orig: ResolveReport) {
 
 object LicenseReport {
 
+  val mvnSearchUrl = "http://search.maven.org/remotecontent?filepath="
+
   val tremorHeaders = Seq("Open Source Name", "Version", "License", "Link to License", "Dual-Licensed?", "Link to Source",
     "Products", "Function Type", "Interaction", "Modified", "Distribution (Downloadable, Internally Used, SaaS)", "Compiled Together")
 
   val defaultHeaders = Seq("Category", "License", "Dependency", "Notes")
+
+  def convertDotToSlash(groupId: String): String = {
+    groupId.replaceAll("\\.", "/")
+  }
+
+  def generateMavenUrl(groupId: String, artifactId: String, version: String) = {
+    val gId = convertDotToSlash(groupId)
+    val aId = convertDotToSlash(artifactId)
+    mvnSearchUrl + gId + "/" + aId + "/" + version.trim + "/" + s"${artifactId}-${version.trim}.pom"
+  }
+
+  def get(url: String): String = {
+
+    val response = Http(url).option(_.setInstanceFollowRedirects(false)).asString
+    val resp = get(url, response)
+
+    if (resp == null) {
+      ""
+    } else {
+      resp.body
+    }
+  }
+
+  def get(url: String, resp: HttpResponse[String]): HttpResponse[String] = {
+    if (url.isEmpty)
+      return resp
+
+    val response = Http(url).option(_.setInstanceFollowRedirects(false)).asString
+
+    if (response.code == 404)
+      return null
+
+    if (response.header("Location").nonEmpty) {
+      val redirect = response.header("Location").get
+      get(response.header("Location").get, response)
+    } else {
+      get("", response)
+    }
+  }
+
+  def findLicenseThroughParent(xml: Elem): (String, String) = {
+    var licensesNode = xml \ "licenses"
+    var parent = xml \ "parent"
+    while (licensesNode.isEmpty && parent.nonEmpty) {
+      val groupId = parent \ "groupId" text
+      val artifactId = parent \ "artifactId" text
+      val version = parent \ "version" text
+
+      val mvnUrl = generateMavenUrl(groupId, artifactId, version)
+
+      val r = get(mvnUrl)
+      val pom = scala.xml.XML.loadString(r)
+
+      licensesNode = pom \ "licenses"
+      parent = pom \ "parent"
+    }
+
+    val name = licensesNode \ "license" \ "name" text
+    val url = licensesNode \ "license" \ "url" text
+
+    (name, url)
+  }
+
+  def getLicenseFromMaven(groupId: String, artifactId: String, version: String): (String, String) = {
+
+    val mvnUrl = generateMavenUrl(groupId, artifactId, version)
+    val r = get(mvnUrl)
+
+    if (r.nonEmpty) {
+      val pom = scala.xml.XML.loadString(r)
+      findLicenseThroughParent(pom)
+    } else {
+      ("", "")
+    }
+  }
 
   def withPrintableFile(file: File)(f: (Any => Unit) => Unit): Unit = {
     IO.createDirectory(file.getParentFile)
@@ -56,20 +136,20 @@ object LicenseReport {
         print(makeHeader(language))
         print(language.tableHeader(tremorHeaders))
         for (dep <- ordered) {
-          val licenseLink = language.createHyperLink(dep.license.url, dep.license.name)
+
           print(language.tableRow(
             Seq(
               s"${dep.module.organization}:${dep.module.name}",
               dep.module.version,
               dep.license.name,
-              dep.license.url,
+              if (dep.license.url == null) "" else dep.license.url,
               "No",
-              dep.module.url,
+              if (dep.module.url == null) "" else dep.module.url,
               projectName, // Product,
               "Java Library",
               "Used via API",
               "No",
-              "SaaS",
+              if (dep.configs.contains("test") && dep.configs.size == 1) "Internally Used" else "SaaS",
               "No"
             )))
         }
@@ -126,10 +206,11 @@ object LicenseReport {
    * given a set of categories and an array of ivy-resolved licenses, pick the first one from our list, or
    *  default to 'none specified'.
    */
-  def pickLicense(categories: Seq[LicenseCategory])(licenses: Array[org.apache.ivy.core.module.descriptor.License]): LicenseInfo = {
+  def pickLicense(categories: Seq[LicenseCategory], groupId: String, artifactId: String, version: String)(licenses: Array[org.apache.ivy.core.module.descriptor.License]): LicenseInfo = {
     if (licenses.isEmpty) {
       return LicenseInfo(LicenseCategory.NoneSpecified, "", "")
     }
+
     // We look for a license matching the category in the order they are defined.
     // i.e. the user selects the licenses they prefer to use, in order, if an artifact is dual-licensed (or more)
     for (category <- categories) {
@@ -140,6 +221,12 @@ object LicenseReport {
       }
     }
     val license = licenses(0)
+
+    if (license.getName == "none specified" && license.getUrl == "none specified") {
+      val mvnLicense = getLicenseFromMaven(groupId, artifactId, version)
+      return LicenseInfo(LicenseCategory(mvnLicense._1), mvnLicense._1, mvnLicense._2)
+    }
+
     LicenseInfo(LicenseCategory.Unrecognized, license.getName, license.getUrl)
   }
   /** Picks a single license (or none) for this dependency. */
@@ -153,7 +240,10 @@ object LicenseReport {
       desc <- Option(dep.getDescriptor)
       licenses = Option(desc.getLicenses).filterNot(_.isEmpty).getOrElse(Array(new org.apache.ivy.core.module.descriptor.License("none specified", "none specified")))
       // TODO - grab configurations.
-    } yield DepLicense(getModuleInfo(dep), pickLicense(categories)(licenses), filteredConfigs)
+    } yield {
+      val depModuleInfo = getModuleInfo(dep)
+      DepLicense(depModuleInfo, pickLicense(categories, depModuleInfo.organization, depModuleInfo.name, depModuleInfo.version)(licenses), filteredConfigs)
+    }
 
   def getLicenses(report: ResolveReport, configs: Set[String] = Set.empty, categories: Seq[LicenseCategory] = LicenseCategory.all): Seq[DepLicense] = {
     import collection.JavaConverters._
@@ -193,4 +283,5 @@ object LicenseReport {
         } else None
       (resolveReport, err)
     }
+
 }

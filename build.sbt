@@ -33,6 +33,7 @@ git.baseVersion := "1.0"
 licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html"))
 
 libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.1"
+libraryDependencies += "org.scalaj" %% "scalaj-http" % "2.3.0"
 
 scriptedSettings
 
