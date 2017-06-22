@@ -4,7 +4,7 @@ name := "sbt-license-report"
 
 sbtPlugin := true
 
-publishMavenStyle := false
+publishMavenStyle := true
 //bintrayOrganization := Some("sbt")
 //name in bintray := "sbt-license-report"
 //bintrayRepository := "sbt-plugin-releases"
